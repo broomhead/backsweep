@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>backsweep review</title>
+<style>
+:root {
+  --bg: #f6f5f2; --panel: #ffffff; --ink: #1c1b19; --muted: #6b6860; --line: #e3e0d8;
+  --keep: #1f7a4d; --keep-bg: #e3f3ea; --del: #b3261e; --del-bg: #fbe7e5;
+  --pend: #8a6d1a; --focus: #2f5fd0;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #141412; --panel: #1d1d1a; --ink: #ecebe6; --muted: #9a978e; --line: #2f2e2a;
+    --keep: #5cc98f; --keep-bg: #1b3326; --del: #f2837a; --del-bg: #3a1f1c;
+    --pend: #d9b659; --focus: #7aa2ff;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink);
+  font: 14px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; }
+header { position: sticky; top: 0; z-index: 5; background: var(--bg);
+  border-bottom: 1px solid var(--line); padding: 12px 16px; }
+.top { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: baseline; }
+h1 { font-size: 16px; margin: 0; }
+.sub { color: var(--muted); }
+.bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 10px; }
+.tabs { display: flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.tabs button { border: 0; border-right: 1px solid var(--line); border-radius: 0; }
+.tabs button:last-child { border-right: 0; }
+.tabs button[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
+button, select { font: inherit; color: var(--ink); background: var(--panel);
+  border: 1px solid var(--line); border-radius: 8px; padding: 5px 10px; cursor: pointer; }
+button:disabled { opacity: .45; cursor: default; }
+.n { font-variant-numeric: tabular-nums; font-weight: 600; }
+.spacer { flex: 1; }
+.bulk.armed { background: var(--del); color: #fff; border-color: var(--del); }
+.hint { color: var(--muted); font-size: 12px; margin-top: 8px; }
+kbd { font: 11px ui-monospace, monospace; border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; }
+#err { display: none; background: var(--del-bg); color: var(--del); padding: 8px 16px; }
+main { padding: 12px 16px 80px; max-width: 1100px; margin: 0 auto; }
+.row { display: grid; grid-template-columns: 176px 1fr auto; gap: 14px; align-items: center;
+  background: var(--panel); border: 1px solid var(--line); border-left: 4px solid var(--pend);
+  border-radius: 10px; padding: 10px; margin-bottom: 8px; }
+.row.keep { border-left-color: var(--keep); }
+.row.delete { border-left-color: var(--del); background: var(--del-bg); }
+.row.deleted { opacity: .5; border-left-color: var(--muted); }
+.row.focused { outline: 2px solid var(--focus); outline-offset: 1px; }
+.thumb { position: relative; width: 176px; aspect-ratio: 16/9; border-radius: 6px; overflow: hidden;
+  background: var(--line); cursor: pointer; border: 0; padding: 0; }
+.thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.thumb .play { position: absolute; inset: auto 6px 6px auto; background: rgba(0,0,0,.7); color: #fff;
+  font-size: 11px; padding: 1px 6px; border-radius: 4px; }
+.title { font-weight: 600; color: var(--ink); text-decoration: none; overflow-wrap: anywhere; }
+.title:hover { text-decoration: underline; }
+.meta { color: var(--muted); margin-top: 4px; font-variant-numeric: tabular-nums; }
+.seg { display: flex; gap: 6px; }
+.seg button[data-d="keep"][aria-pressed="true"] { background: var(--keep); border-color: var(--keep); color: #fff; }
+.seg button[data-d="delete"][aria-pressed="true"] { background: var(--del); border-color: var(--del); color: #fff; }
+.badge { font-size: 12px; color: var(--muted); }
+.player { grid-column: 1 / -1; aspect-ratio: 16/9; width: 100%; max-width: 720px; border: 0; border-radius: 8px; }
+.empty { color: var(--muted); text-align: center; padding: 40px; }
+@media (max-width: 640px) {
+  .row { grid-template-columns: 112px 1fr; }
+  .thumb { width: 112px; }
+  .seg { grid-column: 1 / -1; }
+  .seg button { flex: 1; }
+  .hint { display: none; }
+  header { position: static; }
+}
+</style>
+</head>
+<body>
+<header>
+  <div class="top">
+    <h1 id="channel">backsweep</h1>
+    <span class="sub" id="criteria"></span>
+  </div>
+  <div class="bar">
+    <div class="tabs" id="tabs">
+      <button data-f="all" aria-pressed="true">All <span class="n" id="c-all">0</span></button>
+      <button data-f="pending" aria-pressed="false">Unreviewed <span class="n" id="c-pending">0</span></button>
+      <button data-f="keep" aria-pressed="false">Keep <span class="n" id="c-keep">0</span></button>
+      <button data-f="delete" aria-pressed="false">Delete <span class="n" id="c-delete">0</span></button>
+      <button data-f="deleted" aria-pressed="false">Deleted <span class="n" id="c-deleted">0</span></button>
+    </div>
+    <select id="sort" aria-label="Sort">
+      <option value="date-asc">Oldest first</option>
+      <option value="date-desc">Newest first</option>
+      <option value="views-desc">Most views</option>
+      <option value="views-asc">Fewest views</option>
+    </select>
+    <span class="spacer"></span>
+    <button class="bulk" data-bulk="keep">Unreviewed shown → Keep</button>
+    <button class="bulk" data-bulk="delete">Unreviewed shown → Delete</button>
+  </div>
+  <div class="hint">
+    <kbd>j</kbd>/<kbd>k</kbd> move · <kbd>d</kbd> delete · <kbd>s</kbd> keep · <kbd>u</kbd> unreviewed ·
+    <kbd>p</kbd> preview · <kbd>o</kbd> open on YouTube. Every change saves to the plan file. Nothing is deleted from YouTube here.
+  </div>
+</header>
+<div id="err"></div>
+<main id="list"></main>
+
+<script>
+const S = { cands: [], byId: new Map(), filter: "all", sort: "date-asc", focus: -1, visible: [] };
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const fmt = (n) => n == null ? "?" : n.toLocaleString();
+const state = (c) => c.deleted ? "deleted" : c.decision;
+
+function showErr(msg) { const e = $("#err"); e.textContent = msg; e.style.display = msg ? "block" : "none"; }
+
+async function load() {
+  const r = await fetch("/api/plan");
+  if (!r.ok) return showErr("Couldn't load the plan (" + r.status + ").");
+  apply(await r.json(), true);
+}
+
+function apply(data, rerender) {
+  S.cands = data.candidates;
+  S.byId = new Map(S.cands.map((c) => [c.id, c]));
+  const cr = data.criteria;
+  $("#channel").textContent = data.channel_title;
+  $("#criteria").textContent = `${data.plan} · published before ${cr.before} (${cr.tz})` +
+    (cr.max_views == null ? "" : ` · ≤ ${fmt(cr.max_views)} views`);
+  document.title = `review · ${data.channel_title}`;
+  const k = data.counts;
+  $("#c-all").textContent = S.cands.length;
+  for (const f of ["pending", "keep", "delete", "deleted"]) $("#c-" + f).textContent = k[f];
+  if (rerender) render(); else S.cands.forEach(updateRow);
+}
+
+function sorted() {
+  const [key, dir] = S.sort.split("-");
+  const v = (c) => key === "date" ? c.published_at : (c.views ?? -1);
+  return S.cands.filter((c) => S.filter === "all" || state(c) === S.filter)
+    .sort((a, b) => (v(a) < v(b) ? -1 : v(a) > v(b) ? 1 : 0) * (dir === "asc" ? 1 : -1));
+}
+
+function render() {
+  S.visible = sorted();
+  const list = $("#list");
+  if (!S.visible.length) { list.innerHTML = `<div class="empty">Nothing here.</div>`; return; }
+  list.innerHTML = S.visible.map((c) => `
+    <div class="row" id="r-${c.id}" data-id="${c.id}">
+      <button class="thumb" data-act="preview" aria-label="Preview ${esc(c.title)}">
+        <img loading="lazy" alt="" src="https://i.ytimg.com/vi/${c.id}/mqdefault.jpg"
+             onerror="this.style.visibility='hidden'"><span class="play">▶ preview</span>
+      </button>
+      <div>
+        <a class="title" href="${esc(c.url)}" target="_blank" rel="noopener">${esc(c.title)}</a>
+        <div class="meta">${c.date} · ${fmt(c.views)} views · ${esc(c.privacy)}</div>
+      </div>
+      <div class="seg">
+        <button data-d="keep">Keep</button>
+        <button data-d="delete">Delete</button>
+      </div>
+    </div>`).join("");
+  S.visible.forEach(updateRow);
+  S.focus = Math.min(S.focus, S.visible.length - 1);
+  paintFocus(false);
+}
+
+function updateRow(c) {
+  const row = document.getElementById("r-" + c.id);
+  if (!row) return;
+  row.classList.remove("pending", "keep", "delete", "deleted");
+  row.classList.add(state(c));
+  const seg = row.querySelector(".seg");
+  if (c.deleted) { seg.innerHTML = `<span class="badge">Deleted</span>`; return; }
+  seg.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.d === c.decision)));
+}
+
+async function decide(ids, decision) {
+  ids = ids.filter((id) => !S.byId.get(id)?.deleted);
+  if (!ids.length) return;
+  const before = ids.map((id) => [id, S.byId.get(id).decision]);
+  ids.forEach((id) => { S.byId.get(id).decision = decision; updateRow(S.byId.get(id)); });
+  try {
+    const r = await fetch("/api/decision", { method: "POST",
+      headers: { "Content-Type": "application/json", "X-Backsweep": "1" },
+      body: JSON.stringify({ ids, decision }) });
+    if (!r.ok) throw new Error(r.status);
+    showErr("");
+    apply(await r.json(), false);
+  } catch (e) {
+    before.forEach(([id, d]) => { S.byId.get(id).decision = d; updateRow(S.byId.get(id)); });
+    showErr("Didn't save (" + e.message + "). Is `backsweep review` still running?");
+  }
+}
+
+function togglePreview(id) {
+  const row = document.getElementById("r-" + id);
+  const existing = row.querySelector("iframe");
+  if (existing) return existing.remove();
+  row.insertAdjacentHTML("beforeend",
+    `<iframe class="player" src="https://www.youtube-nocookie.com/embed/${id}?autoplay=1" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>`);
+}
+
+function paintFocus(scroll = true) {
+  document.querySelectorAll(".row.focused").forEach((r) => r.classList.remove("focused"));
+  const c = S.visible[S.focus];
+  if (!c) return;
+  const row = document.getElementById("r-" + c.id);
+  row.classList.add("focused");
+  if (scroll) row.scrollIntoView({ block: "center", behavior: "smooth" });
+}
+
+$("#list").addEventListener("click", (e) => {
+  const row = e.target.closest(".row"); if (!row) return;
+  const id = row.dataset.id;
+  S.focus = S.visible.findIndex((c) => c.id === id); paintFocus(false);
+  const btn = e.target.closest("button"); if (!btn) return;
+  if (btn.dataset.act === "preview") return togglePreview(id);
+  if (btn.dataset.d) decide([id], S.byId.get(id).decision === btn.dataset.d ? "pending" : btn.dataset.d);
+});
+
+$("#tabs").addEventListener("click", (e) => {
+  const b = e.target.closest("button"); if (!b) return;
+  S.filter = b.dataset.f; S.focus = -1;
+  document.querySelectorAll("#tabs button").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+  render();
+});
+$("#sort").addEventListener("change", (e) => { S.sort = e.target.value; render(); });
+
+// Bulk actions take two clicks: the first arms the button and says how many.
+document.querySelectorAll(".bulk").forEach((b) => {
+  const label = b.textContent;
+  b.addEventListener("click", () => {
+    const ids = S.visible.filter((c) => state(c) === "pending").map((c) => c.id);
+    if (!b.classList.contains("armed")) {
+      if (!ids.length) return;
+      b.classList.add("armed"); b.textContent = `Mark ${ids.length} as ${b.dataset.bulk === "keep" ? "Keep" : "Delete"}?`;
+      setTimeout(() => { b.classList.remove("armed"); b.textContent = label; }, 4000);
+      return;
+    }
+    b.classList.remove("armed"); b.textContent = label;
+    decide(ids, b.dataset.bulk);
+  });
+});
+
+document.addEventListener("keydown", (e) => {
+  if (e.metaKey || e.ctrlKey || e.altKey || e.target.matches("select, input")) return;
+  const c = S.visible[S.focus];
+  const move = (d) => { S.focus = Math.max(0, Math.min(S.visible.length - 1, S.focus + d)); paintFocus(); };
+  switch (e.key) {
+    case "j": case "ArrowDown": move(1); break;
+    case "k": case "ArrowUp": move(-1); break;
+    case "d": if (c) { decide([c.id], "delete"); move(1); } break;
+    case "s": if (c) { decide([c.id], "keep"); move(1); } break;
+    case "u": if (c) decide([c.id], "pending"); break;
+    case "p": if (c) togglePreview(c.id); break;
+    case "o": if (c) window.open(c.url, "_blank", "noopener"); break;
+    default: return;
+  }
+  e.preventDefault();
+});
+
+load();
+</script>
+</body>
+</html>

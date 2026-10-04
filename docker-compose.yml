@@ -1,0 +1,13 @@
+services:
+  backsweep:
+    build: .
+    image: backsweep:local
+    stdin_open: true   # confirmations need a real terminal
+    tty: true
+    ports:
+      - "127.0.0.1:8780:8780"   # review page; only published with `run --service-ports`
+    environment:
+      BACKSWEEP_TZ: America/Chicago   # timezone --before is read in
+    volumes:
+      - ./secrets:/secrets   # client_secret.json (you) + token.json (auth)
+      - ./state:/state       # plan-*.json/.csv + deleted.jsonl

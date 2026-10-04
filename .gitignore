@@ -1,0 +1,19 @@
+# ── credentials: never commit ────────────────────────────────────────────────
+secrets/
+**/client_secret*.json
+**/token.json
+.env
+.env.*
+
+# ── run data: plans, CSV exports, the deletion log ───────────────────────────
+state/
+*.json.tmp
+
+# ── python / editors / macOS ─────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.DS_Store
+.idea/
+.vscode/

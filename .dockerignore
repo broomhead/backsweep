@@ -1,0 +1,8 @@
+secrets/
+state/
+.git/
+.gitignore
+__pycache__/
+*.py[cod]
+.DS_Store
+README.md
